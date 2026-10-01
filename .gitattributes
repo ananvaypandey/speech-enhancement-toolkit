@@ -1,0 +1,26 @@
+# Normalise line endings: check in LF, convert on checkout for Windows.
+# Keeps diffs clean across Windows/macOS/Linux contributors.
+* text=auto eol=lf
+
+# Binary files Git must never touch.
+*.wav binary
+*.mp3 binary
+*.m4a binary
+*.flac binary
+*.ogg binary
+*.opus binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.pt binary
+*.pth binary
+*.onnx binary
+*.safetensors binary
+
+# Lockfiles and generated assets stay LF regardless.
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
