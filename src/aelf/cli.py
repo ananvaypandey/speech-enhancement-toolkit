@@ -39,6 +39,10 @@ def _fmt_lufs(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.1f} LUFS"
 
 
+def _fmt_snr(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:+.1f} dB"
+
+
 def cmd_enhance(args: argparse.Namespace) -> int:
     source = Path(args.input).expanduser()
     if not source.exists():
@@ -92,18 +96,35 @@ def cmd_enhance(args: argparse.Namespace) -> int:
         print()
         print("What changed")
         print(f"  noise floor  {_fmt_db(noise_before.noise_floor_dbfs)} -> {_fmt_db(floor_after.noise_floor_dbfs)}")
+        print(f"  speech-to-noise  {_fmt_snr(noise_before.estimated_snr_db)} -> {_fmt_snr(floor_after.estimated_snr_db)}")
         print(f"  loudness     {_fmt_lufs(before.lufs_integrated)} -> {_fmt_lufs(after.lufs_integrated)}")
         print(f"  peak         {_fmt_db(before.peak_dbfs)} -> {_fmt_db(after.peak_dbfs)}")
 
-        # Either floor can be None for digital silence, where there is nothing
+        # Either value can be None for digital silence, where there is nothing
         # to measure; subtracting None would raise rather than report.
         reduction = None
         if noise_before.noise_floor_dbfs is not None and floor_after.noise_floor_dbfs is not None:
             reduction = noise_before.noise_floor_dbfs - floor_after.noise_floor_dbfs
+        # The noise floor is an absolute level, so normalising the recording
+        # shifts it even when the noise is genuinely quieter. The gap between
+        # the floor and the programme does not, which is what actually answers
+        # "did the background get better".
+        snr_gain = None
+        if noise_before.estimated_snr_db is not None and floor_after.estimated_snr_db is not None:
+            snr_gain = floor_after.estimated_snr_db - noise_before.estimated_snr_db
         print()
         print("What this does and does not tell you")
         if reduction is None:
             print("  A noise floor could not be measured, so there is no figure to report here.")
+        elif snr_gain is not None and snr_gain > 1.0 and reduction < 1.0:
+            # The floor rose because the whole recording got louder, not
+            # because the noise got worse. Say which, or the number misleads.
+            # Signed as after-minus-before, so a rise reads as a rise.
+            moved = -(reduction)
+            print(
+                f"  The measured noise floor moved {moved:+.1f} dB, but that mostly reflects the "
+                f"loudness change above. Relative to the voice, the background improved by {snr_gain:.1f} dB."
+            )
         elif reduction > 1.0:
             print(f"  The measured noise floor dropped by {reduction:.1f} dB.")
         else:

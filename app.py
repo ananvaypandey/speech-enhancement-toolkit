@@ -57,6 +57,10 @@ def _fmt_lufs(value: float | None) -> str:
     return "not measurable" if value is None else f"{value:.1f} LUFS"
 
 
+def _fmt_snr(value: float | None) -> str:
+    return "not measurable" if value is None else f"{value:.1f} dB"
+
+
 def _db_arrow(before: float | None, after: float | None, lower_is_better: bool = False) -> str:
     if before is None or after is None:
         return "not measurable"
@@ -234,6 +238,11 @@ with right:
         f"({_db_arrow(before_noise.noise_floor_dbfs, after_noise.noise_floor_dbfs, lower_is_better=True)})"
     )
     st.write(
+        f"- Speech against background: {_fmt_snr(before_noise.estimated_snr_db)} → "
+        f"{_fmt_snr(after_noise.estimated_snr_db)} "
+        f"({_db_arrow(before_noise.estimated_snr_db, after_noise.estimated_snr_db)})"
+    )
+    st.write(
         f"- Loudness: {_fmt_lufs(before_levels.lufs_integrated)} → {_fmt_lufs(after_levels.lufs_integrated)}"
     )
     st.write(f"- Peak: {_fmt_db(before_levels.peak_dbfs)} → {_fmt_db(after_levels.peak_dbfs)}")
@@ -250,8 +259,21 @@ with right:
     reduction = None
     if before_noise.noise_floor_dbfs is not None and after_noise.noise_floor_dbfs is not None:
         reduction = before_noise.noise_floor_dbfs - after_noise.noise_floor_dbfs
+    # The noise floor is an absolute level, so turning the loudness up shifts
+    # it even when the background genuinely got quieter. Comparing the floor
+    # against the voice instead is unaffected by any gain change.
+    snr_gain = None
+    if before_noise.estimated_snr_db is not None and after_noise.estimated_snr_db is not None:
+        snr_gain = after_noise.estimated_snr_db - before_noise.estimated_snr_db
     if reduction is None:
         st.write("A noise floor could not be measured for this file, so there is no figure to report.")
+    elif snr_gain is not None and snr_gain > 1.0 and reduction < 1.0:
+        # Signed as after-minus-before, so a rise in the floor reads as a rise.
+        moved = -(reduction)
+        st.write(
+            f"The measured noise floor moved {moved:+.1f} dB, which mostly reflects the loudness "
+            f"change above. Measured against the voice instead, the background improved by {snr_gain:.1f} dB."
+        )
     elif reduction > 1.0:
         st.write(f"The measured background noise came down by {reduction:.1f} dB.")
     else:
