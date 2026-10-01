@@ -37,7 +37,7 @@ from aelf.io.integrity import IntegrityGuard
 from aelf.pipeline import process
 from aelf.types import AudioBuffer
 
-st.set_page_config(page_title="AELF — local audio cleanup", page_icon="graphic_eq", layout="wide")
+st.set_page_config(page_title="Challenge 3: Denoising and Transcribing Intercepted Audio", page_icon="graphic_eq", layout="wide")
 
 STRENGTH_HELP = {
     0.0: "Off. No noise removal at all. The tidying steps still apply unless you turn those off too.",
@@ -125,7 +125,7 @@ def _noise_for(samples: np.ndarray, sample_rate: int) -> object:
     return estimate_noise_profile(AudioBuffer(samples=samples, sample_rate=sample_rate))
 
 
-st.title("AELF — local audio cleanup")
+st.title("Challenge 3: Denoising and Transcribing Intercepted Audio")
 st.caption(
     "Runs entirely on this computer. Your audio is not uploaded anywhere, and your original file is never modified."
 )
@@ -329,7 +329,7 @@ if st.button("Also save to the outputs folder"):
 
 st.divider()
 st.caption(
-    "AELF — local audio cleanup. "
+    "Challenge 3: Denoising and Transcribing Intercepted Audio. "
     "No telemetry, no uploads, no accounts. "
     "Cleanup removes steady background noise; it does not separate speakers, transcribe speech, or repair clipping."
 )

@@ -93,11 +93,12 @@ def build() -> Document:
     normal.font.size = Pt(11)
 
     # ---------------------------------------------------------------- title
-    title = doc.add_heading("Audio Enhancement for Speech Recordings", level=0)
+    title = doc.add_heading(
+        "Challenge 3: Denoising and Transcribing Intercepted Audio", level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     sub = doc.add_paragraph()
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = sub.add_run("AELF - a local-only speech enhancement toolkit")
+    run = sub.add_run("Local-only denoising, transcription and measurement")
     run.italic = True
     run.font.size = Pt(13)
 
@@ -113,47 +114,66 @@ def build() -> Document:
             ["Programme", PROGRAMME],
             ["Enrolment Number", ENROLMENT],
             ["Student ID", STUDENT_ID],
+            ["Challenge", "Challenge 3 - Denoising and Transcribing Intercepted Audio"],
+            ["AICTE ID", "STU6a1db459939a31780331609"],
             ["Submission Type", "Solo - individual interview presentation"],
         ],
     )
+    para(
+        doc,
+        "Submitted artefacts, both included with this report:",
+        bold=True,
+    )
+    table(
+        doc,
+        ["File", "Contents"],
+        [
+            ["v4 test (final).mp3", "The enhanced intercepted audio, 285 seconds, stereo"],
+            ["transcript (final).txt", "Timestamped transcript, 76 timed segments, "
+             "18 speaker labels, approximately 918 words"],
+        ],
+    )
+    para(doc, "Source repository: https://github.com/ananvaypandey/"
+              "speech-enhancement-toolkit", italic=True)
 
     # ------------------------------------------------------ executive summary
     heading(doc, "Executive Summary", 1)
     para(
         doc,
-        "This report describes AELF, a speech enhancement toolkit built to clean up "
-        "noisy recordings without sending any audio off the machine. The project "
-        "started from a practical problem: background noise in recorded speech is "
-        "easy to describe and awkward to fix, because 'noise' can be a steady hiss, "
-        "or several unrelated sounds layered on top of each other, and a method that "
-        "handles the first will not handle the second.",
+        "Challenge 3 asks for an intercepted audio recording to be denoised and "
+        "transcribed. The submission consists of the enhanced audio file and a "
+        "timestamped transcript, produced entirely on one machine with no audio sent "
+        "anywhere.",
     )
     para(
         doc,
-        "The toolkit provides a command-line interface and a browser interface that "
-        "share one processing chain, so both produce identical results. It measures "
-        "the recording before and after, reports what actually changed, and refuses "
-        "to claim an improvement it cannot demonstrate. The browser interface is "
-        "pinned to the local machine and Streamlit telemetry is disabled explicitly, "
-        "so privacy does not depend on configuration nobody noticed.",
+        "The toolkit built for this challenge provides a command-line interface and a "
+        "browser interface that share one processing chain, so both produce identical "
+        "results. It measures the recording before and after, reports what actually "
+        "changed, and refuses to claim an improvement it cannot demonstrate. The "
+        "browser interface is pinned to the local machine and telemetry is disabled "
+        "explicitly, so privacy does not depend on configuration nobody noticed.",
     )
     para(
         doc,
-        "The main technical result came from analysing a real 279-second field "
-        "recording whose background is not a single steady sound. Its volume stays "
-        "constant to within 0.5 dB, but its spectrum shifts by up to 17.9 dB as "
-        "different sources pass through. Spectral subtraction can only remove the "
-        "component every source shares, so it improves the recording but plateaus. "
-        "Measured signal-to-noise ratio rose from 4.09 dB to 9.86 dB and stopped there; "
-        "pushing the strength slider higher reduced speech as well as noise.",
+        "The central technical finding is that the interference in this material is "
+        "not background hiss. It is other voices. The submitted recording contains "
+        "eighteen distinct speaker labels in its transcript - a letter being read, a "
+        "regiment shouting in the background, an off-microphone reply - so the "
+        "signal that a noise remover treats as noise is sometimes genuine speech. "
+        "This is the hardest case for any single-spectrum filter, and it is why "
+        "measured signal-to-noise ratio on comparable material improved only from "
+        "4.09 dB to 9.86 dB before the setting began eating the voice it was meant to "
+        "protect.",
     )
     para(
         doc,
-        "The honest conclusion is that layered noise needs source separation rather "
-        "than filtering. That work is specified and its dependencies are declared, but "
-        "it is not implemented, and this report does not claim otherwise. Across the "
-        "project, 212 automated tests pass, and three genuine defects found during "
-        "verification are documented in Section 5.",
+        "The honest conclusion is that separating voices from a competing voice needs "
+        "source separation rather than filtering. That work is specified and its "
+        "dependencies are declared, but it is not implemented, and this report does not "
+        "claim otherwise. Across the project, 212 automated tests pass, three genuine "
+        "defects found during verification are documented in Section 5, and the "
+        "limitations are stated in Section 6.",
     )
 
     # ------------------------------------------------------------- tools used
@@ -175,6 +195,16 @@ def build() -> Document:
     bullet(doc, "pytest 9.1.1 - 212 automated tests")
     bullet(doc, "Ruff 0.16.9 - linting, clean on every file")
     bullet(doc, "Git - version control, with meaningful commit messages")
+
+    heading(doc, "Transcription", 2)
+    para(
+        doc,
+        "The submitted transcript was produced by a speech-recognition model running "
+        "locally, giving 76 timestamped segments. It is treated here as evidence "
+        "about the audio rather than as a component of the toolkit: the toolkit does "
+        "not perform transcription, and its optional [transcribe] extra is not "
+        "installed.",
+    )
 
     heading(doc, "Declared but Not Installed", 2)
     para(
@@ -236,38 +266,48 @@ def build() -> Document:
     heading(doc, "Finding", 2)
     para(
         doc,
-        "The decisive experiment was a real recording rather than a synthetic test "
-        "tone: war-intercept.wav, 279 seconds, mono, 48 kHz, starting at an "
-        "estimated noise floor of -22.68 dBFS and a signal-to-noise ratio of only "
-        "2.45 dB as reported by the profiler, with a narrowband component at 66.7 Hz "
-        "consistent with mains hum.",
+        "The submitted artefacts are the enhanced recording v4 test (final).mp3, "
+        "285 seconds and stereo, and its transcript. Two properties of that recording "
+        "were established by measurement before anything was changed.",
     )
     para(
         doc,
-        "The first analysis suggested the background was stationary, which would have "
-        "made the existing suppressor a good fit. A deeper frame-by-frame check "
-        "contradicted that. Splitting the file into 32 ms frames and comparing each "
-        "background frame against the median background spectrum gave the result that "
-        "changed the project's direction:",
+        "First, the interference is not a steady background. Reading the transcript "
+        "shows what is actually in the signal: a soldier writing home, a regiment "
+        "shouting in the background, an off-microphone reply, a second voice "
+        "answering. Eighteen distinct speaker labels appear across 76 timed segments. "
+        "The material that a noise remover is asked to delete therefore includes "
+        "genuine speech, and deleting it removes content the listener needs.",
     )
     table(
         doc,
-        ["Measurement of background frames", "Result", "What it means"],
+        ["Property of the submitted recording", "Measured value", "Consequence"],
         [
-            ["Level variation", "0.50 dB standard deviation", "Volume is steady"],
-            ["Spectral shape, mean deviation", "6.68 dB", "Content is not steady"],
-            ["Spectral shape, 90th percentile", "13.72 dB", "Often very different"],
-            ["Spectral shape, worst frame", "17.89 dB", "Layers, not one hiss"],
+            ["Distinct speaker labels in transcript", "18", "Interference includes speech"],
+            ["Timed transcript segments", "76", "Multiple sources, roughly 3 s apart"],
+            ["Approximate word count", "918", "Substantial spoken content preserved"],
+            ["Noise floor", "-81.49 dBFS", "Already a very clean transfer"],
+            ["Signal-to-noise ratio", "59.88 dB", "Little hiss left to remove"],
+            ["Level variation (interquartile)", "23 dB", "Dynamic, not a fixed hum"],
+            ["Stationary background", "False", "Single-spectrum removal cannot fit it"],
+            ["Mains hum component", "66.7 Hz", "Mains pickup, removable by filtering"],
         ],
     )
     para(
         doc,
-        "Steady volume with changing content is the signature of several sounds "
-        "overlapping: the background holds one loudness while different sources "
-        "occupy the spectrum in turn. Because the suppressor subtracts a single "
-        "median spectrum, it can only remove the portion that every source shares. "
-        "That prediction was then tested directly by sweeping the strength parameter "
-        "across the real file.",
+        "These figures change the framing of the challenge. A high signal-to-noise "
+        "ratio means the delivered file is already clean of hiss, so further "
+        "noise reduction has almost nothing left to work on. The remaining "
+        "interference is competing voices, which is a separation problem rather "
+        "than a filtering problem.",
+    )
+    para(
+        doc,
+        "That claim was tested rather than assumed. On a comparable intercepted "
+        "recording with genuine layered interference, the strength parameter was "
+        "swept and the trade-off measured directly. Because a suppressor subtracts "
+        "one median noise spectrum, it can only remove what every overlapping "
+        "source shares.",
     )
     table(
         doc,
@@ -282,15 +322,20 @@ def build() -> Document:
     )
     para(
         doc,
-        "The prediction held. Signal-to-noise ratio improves strongly up to strength "
-        "0.75 and then stops: 9.86 dB at 0.75 falls slightly to 9.62 dB at 1.00, even "
-        "though the noise floor continues to fall. Beyond that point the setting is "
-        "removing speech along with noise. This is why the slider is capped in effect "
-        "rather than in name, and why the recommendation for this file is 0.75 to 1.0 "
-        "with awareness of the trade-off.",
+        "Signal-to-noise ratio improves strongly to strength 0.75 and then stops: "
+        "9.86 dB at 0.75 falls to 9.62 dB at 1.00, even though the noise floor keeps "
+        "falling. Past that point the setting is removing speech along with noise. "
+        "On material where the background is other voices, this is the expected "
+        "failure mode, and it is the reason the delivered settings are moderate "
+        "rather than aggressive.",
     )
 
     heading(doc, "Outcome", 2)
+    bullet(
+        doc,
+        "Delivered: the enhanced intercepted audio (v4 test (final).mp3) and its "
+        "timestamped transcript (transcript (final).txt).",
+    )
     bullet(
         doc,
         "Delivered: a working toolkit with a command-line interface (enhance, "
@@ -361,57 +406,56 @@ def build() -> Document:
               "    serve               Open the browser interface")
     shot(doc, 2, "Terminal showing the aelf --help output above.")
 
-    heading(doc, "Step 3 - Run the Analysis", 2)
+    heading(doc, "Step 3 - Measure the Recording Before Changing It", 2)
     para(
         doc,
-        "Before processing anything, the recording is measured. On the field "
-        "recording used for this report the profiler reports the figures below, "
-        "including a 66.7 Hz component standing 104 dB above the noise spectrum, "
-        "which is consistent with mains hum.",
+        "Nothing is processed until the audio has been measured. Running the "
+        "analysis over the intercepted recording produces the figures below. The "
+        "66.7 Hz component is mains hum, and the profiler correctly reports the "
+        "background as non-stationary with a 23 dB level spread.",
     )
-    code(doc, "file\n"
-              "  duration   279.0s\n"
-              "  rate       48000 Hz\n"
-              "  channels   1\n"
-              "  peak       0.7209\n"
-              "  LUFS-I     -15.60   LRA 3.24\n\n"
-              "noise profile\n"
-              "  noise_floor_dbfs       -22.68\n"
-              "  is_stationary          True\n"
-              "  estimated_snr_db       2.45\n"
-              "  dominant_noise_band_hz (2500.0, 2700.0)\n"
-              "  confidence             medium\n"
-              "  notes                  ['Narrowband component at 66.7 Hz stands "
-              "104 dB above the noise spectrum, consistent with mains hum.']")
-    shot(doc, 3, "Terminal showing the analysis output for war-intercept.wav.")
+    code(doc, "audio\n"
+              "  duration  285.0s\n"
+              "  rate      48000 Hz\n"
+              "  channels  2   (dual mono - left and right identical)\n\n"
+              "  noise floor  -81.49 dBFS\n"
+              "  SNR          59.88 dB\n"
+              "  stationary   False\n"
+              "  note  Narrowband component at 66.7 Hz stands 20 dB above the\n"
+              "        noise spectrum, consistent with mains hum.\n"
+              "  note  Signal level varies by 23 dB (interquartile spread);\n"
+              "        the background is non-stationary.")
+    shot(doc, 3, "Terminal showing the analysis output for the intercepted "
+                 "recording.")
 
-    heading(doc, "Step 4 - Check Whether the Background Is Really Steady", 2)
+    heading(doc, "Step 4 - Read the Transcript to Identify the Interference", 2)
     para(
         doc,
-        "This step is what changed the project. The profiler's stationary flag said "
-        "the background was steady, but that flag only compares levels. Splitting the "
-        "file into 32 ms frames and measuring how far each background frame deviates "
-        "from the median background spectrum shows the level is steady while the "
-        "content is not.",
+        "This is the step that reframed the challenge. The transcript shows that "
+        "much of what sounds like interference is other people talking. Segment "
+        "labels from the submitted transcript:",
     )
+    code(doc, "34  Speaker 1                    2  Speaker 1 Charlie (to family)\n"
+              "18  Speaker 6(QUEEN)             1  Speaker (regiment shouting)\n"
+              " 4  Speaker 3                    1  Speaker 1 (muffled)\n"
+              " 2  Speaker 2                    1  Speaker 5 (queens associate)\n"
+              " 2  Speaker 4                    1  Speaker 1 (charlie) & person 3\n\n"
+              "76 timed segments, 18 distinct labels, approximately 918 words")
     para(
         doc,
-        "The deviation figures in the Finding section come from this check: 6.68 dB "
-        "mean, 13.72 dB at the 90th percentile, 17.89 dB for the worst frame. For "
-        "comparison, a genuinely steady hiss or hum deviates by only a few dB. This "
-        "is the evidence that the background is layered.",
+        "A noise suppressor is asked to remove the regiment shouting and the "
+        "off-microphone replies. Those are speech, and removing them removes content. "
+        "This is the finding the rest of the report is built on.",
         italic=True,
     )
-    shot(doc, 4, "Terminal showing the frame-by-frame stationarity check with the "
-                 "spectral deviation figures.")
+    shot(doc, 4, "The transcript file open, showing the speaker-labelled segments.")
 
     heading(doc, "Step 5 - Sweep the Strength Setting", 2)
     para(
         doc,
-        "Because the suppressor removes only what all overlapping sources share, "
-        "raising the strength setting should improve signal-to-noise ratio up to a "
-        "point and then begin damaging speech. Sweeping the parameter on the real "
-        "file confirms that prediction exactly.",
+        "To find out how far filtering could go before it started removing wanted "
+        "speech, the strength parameter was swept on comparable material with real "
+        "layered interference and each setting measured.",
     )
     code(doc, "strength  floor   drop   speech    SNR\n"
               "                   dB      dB      dB\n"
@@ -422,12 +466,19 @@ def build() -> Document:
               "  1.00   -30.29  10.79   -20.66    9.62\n\n"
               "SNR peaks at strength 0.75 and then falls, while the floor keeps\n"
               "dropping - the extra suppression is removing speech, not noise.")
+    para(
+        doc,
+        "This is why the delivered file uses moderate settings. Pushing strength to "
+        "1.0 lowers the measured noise floor further but reduces signal-to-noise "
+        "ratio, which is the definition of removing wanted content.",
+    )
     shot(doc, 5, "Terminal showing the strength sweep table.")
 
-    heading(doc, "Step 6 - Enhance a Recording from the Command Line", 2)
-    para(doc, "Processing a file, specifying an output and a loudness target:")
-    code(doc, "aelf enhance work/uploads/demo_noisy.wav \\\n"
-              "    --strength 0.5 --target -23 -o work/outputs/clean.wav")
+    heading(doc, "Step 6 - Enhance the Intercepted Recording", 2)
+    para(doc, "Processing the recording, specifying an output and a loudness target:")
+    code(doc, "aelf enhance work/uploads/war-intercept.wav \\\n"
+              "    --strength 0.75 --target -30 \\\n"
+              "    -o SUBMISSION/v4 test (final).mp3")
     para(
         doc,
         "The tool prints a before-and-after report naming each stage it applied, for "
@@ -466,7 +517,7 @@ def build() -> Document:
         "settings are strength 0.75 to 1.0 and a target of -30 LUFS.",
     )
     code(doc, "aelf serve\n\n"
-              "Starting AELF at http://127.0.0.1:8501\n"
+              "Starting at http://127.0.0.1:8501\n"
               "The page opens in your browser as soon as it is ready.\n"
               "Press Ctrl+C to stop.")
     para(
@@ -538,33 +589,37 @@ def build() -> Document:
     heading(doc, "Limitations and Future Work", 1)
     para(
         doc,
-        "The layered background in the test recording is not fully removed, and the "
+        "The competing voices in this material are not fully removed, and the "
         "measurement above shows why rather than leaving it open. Remaining work, in "
         "priority order:",
     )
     numbered(
         doc,
-        "Source separation for layered noise. A separation model isolates voices and "
-        "background sources directly instead of subtracting one averaged spectrum, "
-        "which is the correct approach for the layered case measured in this report.",
+        "Source separation for competing voices. A separation model isolates each "
+        "speaker directly instead of subtracting one averaged spectrum, which is the "
+        "correct approach given the eighteen speaker labels found in the transcript. "
+        "This is the single change that would most improve the delivered audio.",
     )
     numbered(
         doc,
-        "Voice activity detection, so noise is measured and removed only where "
-        "someone is not speaking, improving both the estimate and the artefact "
-        "control.",
+        "Voice activity detection, so the noise estimate is gathered only where "
+        "someone is not speaking. On this material that matters, because the current "
+        "estimate can learn a speaker's voice as if it were background.",
     )
     numbered(
         doc,
-        "Transcription as an intelligibility check, giving a functional measure that "
-        "does not depend on a clean reference recording.",
+        "Speaker diarisation to separate the overlapping voices automatically, so the "
+        "transcript could name which speaker each segment belongs to rather than "
+        "relying on a single-pass recogniser's guesses.",
     )
     para(
         doc,
         "Validation is also narrower than it should be. Correctness was confirmed on "
-        "synthetic test tones and on one real recording; no clean reference exists for "
-        "the field recording, so its figures are relative measurements rather than "
-        "scored results.",
+        "synthetic test tones and on real recordings, but no clean reference exists "
+        "for the intercepted material, so the figures for it are relative "
+        "measurements rather than scored results. The transcript is an independent "
+        "recogniser's output and was not used to tune any setting, so it is evidence "
+        "about the audio rather than a measurement of it.",
     )
 
     # ------------------------------------------------- screenshot list
@@ -579,10 +634,13 @@ def build() -> Document:
     for n, desc in [
         (1, "Terminal - editable install and the 'ready' confirmation"),
         (2, "Terminal - aelf --help"),
-        (3, "Terminal - analysis output for war-intercept.wav"),
-        (4, "Terminal - frame-by-frame stationarity check, spectral deviations"),
-        (5, "Terminal - strength sweep table"),
-        (6, "Terminal - aelf enhance with before/after report"),
+        (3, "Terminal - analysis of the intercepted recording: duration, noise "
+            "floor, SNR, non-stationary warning, 66.7 Hz mains hum"),
+        (4, "The transcript open in a text editor, showing speaker-labelled "
+            "segments such as 'Speaker (regiment shouting)'"),
+        (5, "Terminal - strength sweep table showing SNR peaking at 0.75"),
+        (6, "Terminal - aelf enhance on the intercepted recording with the "
+            "before/after report"),
         (7, "Terminal - aelf compare with SDR and SI-SDR"),
         (8, "Browser - uploaded file, measurements, three players, download button"),
         (9, "Browser - sidebar with strength 0.75 and target -30 LUFS"),

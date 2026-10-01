@@ -1,4 +1,4 @@
-"""AELF - Authorized Enhancement & Forensics Lab for audio.
+"""Challenge 3: Denoising and Transcribing Intercepted Audio.
 
 Local-only speech enhancement, source separation and measurement toolkit.
 No audio leaves the machine; the only network access is the initial

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aelf"
 version = "0.1.0"
-description = "Local-only audio enhancement, source separation and measurement toolkit"
+description = "Challenge 3: Denoising and Transcribing Intercepted Audio - local-only denoising, transcription and measurement"
 requires-python = ">=3.11,<3.12"
 readme = "README.md"
 license = { text = "Proprietary" }

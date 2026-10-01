@@ -225,7 +225,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
     phones home.
     """
     url = f"http://127.0.0.1:{args.port}"
-    print(f"Starting AELF at {url}")
+    print("Challenge 3: Denoising and Transcribing Intercepted Audio")
+    print(f"Starting at {url}")
     print("The page opens in your browser as soon as it is ready.")
     print("Press Ctrl+C to stop.")
     try:
@@ -257,7 +258,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aelf",
-        description="Local-only audio enhancement. Nothing leaves your machine.",
+        description="Challenge 3: Denoising and Transcribing Intercepted Audio. Nothing leaves your machine.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

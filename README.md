@@ -1,4 +1,4 @@
-# AELF — Speech Enhancement Toolkit
+# Challenge 3: Denoising and Transcribing Intercepted Audio
 
 Turns a noisy recording into a cleaner one, entirely on your own computer.
 
