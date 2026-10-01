@@ -17,18 +17,17 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 import webbrowser
 from pathlib import Path
 
 from .analysis.levels import measure_levels
 from .analysis.noise_profile import estimate_noise_profile
 from .config import PATHS, TARGET_LUFS_SPEECH
-from .enhance import enhance
 from .errors import AelfError, MetricUnavailableError
 from .io.decode import check_supported, decode_to_canonical
 from .io.encode import write_wav
 from .io.integrity import IntegrityGuard
+from .pipeline import process
 
 
 def _fmt_db(value: float | None) -> str:
@@ -71,17 +70,14 @@ def cmd_enhance(args: argparse.Namespace) -> int:
                 "those cannot be recovered"
             )
 
-        print(f"Enhancing (strength {args.strength:.2f}, classical spectral) ...")
-        started = time.perf_counter()
-        result = enhance(buffer, strength=args.strength)
-        print(f"  done in {time.perf_counter() - started:.2f}s using {result.backend}")
-
+        print(f"Processing (strength {args.strength:.2f}) ...")
+        result = process(buffer, strength=args.strength, tidy=not args.no_tidy, target_lufs=args.target)
+        print(f"  done in {result.processing_time_s:.2f}s using {result.backend}")
+        for line in result.applied:
+            print(f"  - {line}")
+        for line in result.notes:
+            print(f"  note: {line}")
         output = result.audio
-        if args.target is not None:
-            from .postprocess.normalize import normalise_lufs
-
-            output = normalise_lufs(output, target_lufs=args.target)
-            print(f"  normalised to {args.target:.1f} LUFS")
 
         PATHS.ensure()
         destination = Path(args.output).expanduser() if args.output else PATHS.outputs / f"{source.stem}_clean.wav"
@@ -96,7 +92,7 @@ def cmd_enhance(args: argparse.Namespace) -> int:
         print()
         print("What changed")
         print(f"  noise floor  {_fmt_db(noise_before.noise_floor_dbfs)} -> {_fmt_db(floor_after.noise_floor_dbfs)}")
-        print(f"  loudness     {_fmt_db(before.lufs_integrated)} -> {_fmt_db(after.lufs_integrated)}")
+        print(f"  loudness     {_fmt_lufs(before.lufs_integrated)} -> {_fmt_lufs(after.lufs_integrated)}")
         print(f"  peak         {_fmt_db(before.peak_dbfs)} -> {_fmt_db(after.peak_dbfs)}")
 
         # Either floor can be None for digital silence, where there is nothing
@@ -223,7 +219,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--strength",
         type=float,
         default=0.5,
-        help="0.0 leaves the audio alone, 1.0 removes as much as possible (default: 0.5)",
+        help=(
+            "How much background noise to remove, 0.0 to 1.0 (default: 0.5). "
+            "0.0 turns off noise suppression only; add --no-tidy to leave the audio completely alone"
+        ),
     )
     enhance_cmd.add_argument(
         "--target",
@@ -231,6 +230,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LUFS",
         help=f"Even out the loudness to this level (default: none. {TARGET_LUFS_SPEECH:.0f} suits spoken word)",
+    )
+    enhance_cmd.add_argument(
+        "--no-tidy",
+        action="store_true",
+        help="Skip the rumble removal, speech EQ and harsh-sound control, leaving the voice as enhanced",
     )
     enhance_cmd.set_defaults(func=cmd_enhance)
 

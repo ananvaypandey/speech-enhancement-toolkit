@@ -29,18 +29,18 @@ from aelf.config import (
     TARGET_LUFS_LISTENING,
     TARGET_LUFS_SPEECH,
 )
-from aelf.enhance import available_backends, enhance
+from aelf.enhance import available_backends
 from aelf.errors import AelfError
 from aelf.io.decode import load
 from aelf.io.encode import true_peak_limit, write_wav
 from aelf.io.integrity import IntegrityGuard
-from aelf.postprocess.normalize import normalise_lufs
+from aelf.pipeline import process
 from aelf.types import AudioBuffer
 
 st.set_page_config(page_title="AELF — local audio cleanup", page_icon="graphic_eq", layout="wide")
 
 STRENGTH_HELP = {
-    0.0: "Off. Your audio comes back exactly as it went in.",
+    0.0: "Off. No noise removal at all. The tidying steps still apply unless you turn those off too.",
     0.25: "Light. Takes the edge off steady hiss.",
     0.5: "Recommended. Clearly quieter background noise, speech still natural.",
     0.75: "Strong. Removes more, at the cost of a little speech brightness.",
@@ -83,15 +83,20 @@ def _decode_cached(raw: bytes, name: str) -> tuple[AudioBuffer, float]:
 
 
 @st.cache_data(show_spinner=False)
-def _enhance_cached(samples: np.ndarray, sample_rate: int, strength: float) -> tuple[np.ndarray, str, float, list[str]]:
-    buffer = AudioBuffer(samples=samples, sample_rate=sample_rate)
-    result = enhance(buffer, strength=strength)
-    return result.audio.samples, result.backend, result.processing_time_s, result.notes
-
-
-@st.cache_data(show_spinner=False)
-def _normalise_cached(samples: np.ndarray, sample_rate: int, target: float) -> np.ndarray:
-    return normalise_lufs(AudioBuffer(samples=samples, sample_rate=sample_rate), target_lufs=target).samples
+def _process_cached(
+    samples: np.ndarray,
+    sample_rate: int,
+    strength: float,
+    tidy: bool,
+    target_lufs: float | None,
+) -> tuple[np.ndarray, str, float, list[str], list[str]]:
+    result = process(
+        AudioBuffer(samples=samples, sample_rate=sample_rate),
+        strength=strength,
+        tidy=tidy,
+        target_lufs=target_lufs,
+    )
+    return result.audio.samples, result.backend, result.processing_time_s, result.applied, result.notes
 
 
 def _wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
@@ -151,6 +156,14 @@ with st.sidebar:
             f"{TARGET_LUFS_LISTENING:.0f} LUFS suits headphones."
         ),
     )
+    tidy = st.checkbox(
+        "Tidy the voice",
+        value=True,
+        help=(
+            "Removes low rumble, lifts the frequencies speech is understood on, and takes the edge "
+            "off harsh sssss sounds. Turn this off to leave the voice exactly as enhanced."
+        ),
+    )
 
 uploaded = st.file_uploader(
     "Add your audio file",
@@ -201,9 +214,13 @@ if not before_noise.is_stationary:
 with right:
     st.subheader("After cleanup")
     with st.spinner("Cleaning up ..."):
-        processed, backend, elapsed, notes = _enhance_cached(buffer.samples, buffer.sample_rate, strength)
-        if normalise:
-            processed = _normalise_cached(processed, buffer.sample_rate, target)
+        processed, backend, elapsed, applied, notes = _process_cached(
+            buffer.samples,
+            buffer.sample_rate,
+            strength,
+            tidy,
+            target if normalise else None,
+        )
 
     st.audio(_wav_bytes(processed, buffer.sample_rate), format="audio/wav")
     st.caption(f"Processed in {elapsed:.2f}s using {backend}.")
@@ -222,6 +239,10 @@ with right:
     st.write(f"- Peak: {_fmt_db(before_levels.peak_dbfs)} → {_fmt_db(after_levels.peak_dbfs)}")
     if after_levels.is_clipped:
         st.write(f"- Samples at or over full scale: {after_levels.clipped_sample_count}")
+
+    st.markdown("**What was done**")
+    for line in applied:
+        st.write(f"- {line}")
 
     st.markdown("**How to read this**")
     # Digital silence has no measurable floor, so the difference may not exist

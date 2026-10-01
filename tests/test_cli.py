@@ -35,6 +35,10 @@ def test_enhance_writes_a_file_and_reports_measurements(tmp_path: Path, capsys: 
     assert "Your original is untouched:" in printed
     # Loudness is LUFS, not a peak level; labelling it dBFS would be wrong.
     assert "LUFS" in printed
+    assert "loudness" in printed
+    # Every stage that ran has to be named, including in the summary.
+    assert "high-pass" in printed
+    assert "noise suppression" in printed
     assert out.exists()
     data, sr = sf.read(str(out), always_2d=True)
     assert sr == SR
@@ -86,16 +90,29 @@ def test_enhance_accepts_stereo_and_keeps_both_channels(tmp_path: Path) -> None:
     assert data.shape[1] == 2
 
 
-def test_enhance_at_zero_strength_leaves_the_signal_alone(tmp_path: Path) -> None:
+def test_zero_strength_turns_off_suppression_but_still_tidies(tmp_path: Path) -> None:
+    """Two separate switches, so two separate behaviours to pin down.
+
+    `--strength 0.0` means no noise removal. The tidying stages are a
+    different switch, which is why the help text asks for --no-tidy to reach
+    audio that is genuinely untouched.
+    """
     source = tmp_path / "noisy.wav"
     write_fixture(source, speech_plus_noise(seconds=1.0, noise_sigma=0.05, speech_gain=0.3))
-    out = tmp_path / "unchanged.wav"
+    suppressed_off = tmp_path / "suppression_off.wav"
+    untouched = tmp_path / "untouched.wav"
 
-    assert main(["enhance", str(source), "-o", str(out), "--strength", "0.0"]) == 0
+    assert main(["enhance", str(source), "-o", str(suppressed_off), "--strength", "0.0"]) == 0
+    assert main(["enhance", str(source), "-o", str(untouched), "--strength", "0.0", "--no-tidy"]) == 0
 
     original, _ = sf.read(str(source), always_2d=True)
-    written, _ = sf.read(str(out), always_2d=True)
-    assert np.max(np.abs(original - written)) < 1e-3
+    tidied, _ = sf.read(str(suppressed_off), always_2d=True)
+    as_input, _ = sf.read(str(untouched), always_2d=True)
+
+    # Tidying runs, so the filter stages do change the waveform.
+    assert np.max(np.abs(original - tidied)) > 1e-3
+    # With both switches off the audio is returned as it arrived.
+    assert np.max(np.abs(original - as_input)) < 1e-3
 
 
 def test_enhance_normalises_to_a_requested_target(tmp_path: Path) -> None:
