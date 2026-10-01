@@ -197,6 +197,84 @@ def test_compare_reports_a_missing_file(tmp_path: Path, capsys: pytest.CaptureFi
     assert "no such file" in capsys.readouterr().err
 
 
+def test_the_browser_is_opened_only_once_the_server_answers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bug this pins down.
+
+    The browser used to open on a fixed 1.5s timer. Streamlit binds in about
+    two seconds warm and can take fifteen on a cold start, so on a first run the
+    browser landed on a port nothing was listening on and the user saw
+    "connection refused" - reading it as a broken app.
+
+    Here the server stays silent for several polls. If anything is opened
+    during that window, the user gets the same dead link, so the test fails.
+    """
+    import time as real_time
+
+    opened: list[str] = []
+    attempts: list[float] = []
+
+    class FakeSocket:
+        """Stands in for a connected socket, which is used as a context manager."""
+
+        def __enter__(self) -> object:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    def create_connection(address: object, timeout: float = 0.5) -> object:
+        attempts.append(real_time.monotonic())
+        if len(attempts) < 4:
+            raise OSError("connection refused")
+        return FakeSocket()
+
+    real_sleep = real_time.sleep
+    real_monotonic = real_time.monotonic
+
+    def fast_sleep(seconds: float) -> None:
+        # Skip the real waits so the test does not sit through a retry loop.
+        real_sleep(0)
+
+    monkeypatch.setattr(real_time, "sleep", fast_sleep)
+    monkeypatch.setattr(real_time, "monotonic", lambda: real_monotonic() + len(attempts) * 0.3)
+    monkeypatch.setattr("socket.create_connection", create_connection)
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url))
+
+    from aelf.cli import _open_browser_when_ready
+
+    _open_browser_when_ready("http://127.0.0.1:8501", 8501, timeout_s=30.0).join(timeout=5.0)
+
+    assert len(attempts) == 4, "should keep retrying until the server answers"
+    assert opened == ["http://127.0.0.1:8501"], "must open exactly once, and only after success"
+
+
+def test_the_browser_is_not_opened_if_the_server_never_starts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A server that never comes up must not produce a browser window pointing
+    at a dead address; better no window at all."""
+    import time as real_time
+
+    opened: list[str] = []
+
+    def refuse(address: object, timeout: float = 0.5) -> object:
+        raise OSError("connection refused")
+
+    clock = {"t": 0.0}
+
+    def fake_sleep(seconds: float) -> None:
+        clock["t"] += seconds
+
+    monkeypatch.setattr(real_time, "sleep", fake_sleep)
+    monkeypatch.setattr(real_time, "monotonic", lambda: clock["t"])
+    monkeypatch.setattr("socket.create_connection", refuse)
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url))
+
+    from aelf.cli import _open_browser_when_ready
+
+    _open_browser_when_ready("http://127.0.0.1:8501", 8501, timeout_s=1.0).join(timeout=5.0)
+
+    assert opened == []
+
+
 def test_parser_exposes_the_three_documented_commands() -> None:
     from aelf.cli import build_parser
 

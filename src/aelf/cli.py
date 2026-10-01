@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
 import webbrowser
 from pathlib import Path
 
@@ -183,6 +184,37 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _open_browser_when_ready(url: str, port: int, timeout_s: float = 60.0) -> threading.Thread:
+    """Open the browser once the server actually answers, then not before.
+
+    A fixed delay is a guess. Streamlit binds in about two seconds on a warm
+    start and can take fifteen or more on the first, when it is unpacking
+    configuration and building caches. Opening on a timer therefore lands the
+    browser on a port nothing is listening on, which the user sees as
+    "connection refused" and reasonably reads as a broken app.
+
+    Polling for a real answer removes the guess. The thread is returned so a
+    caller can wait on it; the daemon flag means a browser that never opens
+    cannot keep the server alive.
+    """
+    import socket
+    import time
+
+    def wait() -> None:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                    webbrowser.open(url)
+                    return
+            except OSError:
+                time.sleep(0.25)
+
+    thread = threading.Thread(target=wait, daemon=True)
+    thread.start()
+    return thread
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     """Launch the browser interface.
 
@@ -194,13 +226,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
     """
     url = f"http://127.0.0.1:{args.port}"
     print(f"Starting AELF at {url}")
+    print("The page opens in your browser as soon as it is ready.")
     print("Press Ctrl+C to stop.")
-    try:
-        import threading
-
-        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
-    except Exception:
-        pass
     try:
         from streamlit.web import cli as st_cli
     except ImportError:
@@ -223,6 +250,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         "--browser.gatherUsageStats",
         "false",
     ]
+    _open_browser_when_ready(url, args.port)
     sys.exit(st_cli.main())
 
 
