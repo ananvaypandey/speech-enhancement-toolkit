@@ -147,12 +147,16 @@ class LevelReport:
 class NoiseProfile:
     """Estimated noise characteristics, derived from low-energy frames."""
 
-    noise_floor_dbfs: float
+    # Both are None when there is nothing to measure (empty or digitally
+    # silent signal). A -inf floor and a 0 dB SNR would both read as real
+    # numbers, which is exactly the sort of confident nonsense this toolkit
+    # refuses to emit.
+    noise_floor_dbfs: float | None
     noise_floor_hz: float
     spectral_tilt_db_per_octave: float
     is_stationary: bool
     estimated_hum_hz: float | None
-    estimated_snr_db: float
+    estimated_snr_db: float | None
     dominant_noise_band_hz: tuple[float, float]
     method: str
     confidence: Confidence

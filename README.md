@@ -24,9 +24,11 @@ Point it at a WAV, MP3, or M4A file and it will:
 5. **Report honestly** — what it changed, what it measured, and — this is the
    important part — what it *couldn't* verify.
 
-If you want, it will also separate two people talking, detect when speech
-starts and stops, transcribe it to text, and score how much improvement
-actually happened.
+It also scores how much improvement actually happened, when you have a clean
+recording to compare against.
+
+Separating two people talking, detecting when speech starts and stops, and
+transcribing it are planned but not built yet.
 
 ---
 
@@ -67,6 +69,7 @@ src/aelf/
 ├── config.py            Central settings and pinned constants
 ├── types.py             Shared data shapes
 ├── errors.py            Errors that carry a message worth reading
+├── cli.py               Command line: enhance, compare, serve
 ├── io/                  Getting audio in, putting audio out
 │   ├── decode.py        WAV/MP3/M4A → one standard format
 │   ├── encode.py        Write results, with a no-distortion guarantee
@@ -75,13 +78,18 @@ src/aelf/
 │   ├── levels.py        Loudness, peaks, distortion counting
 │   ├── noise_profile.py What's underneath the voice
 │   └── probe.py         What the file claims about itself
-└── postprocess/         Changing audio, after enhancement
-    ├── filters.py       Rumble removal, speech EQ, harsh-sound control
-    └── normalize.py     Even volume, guaranteed no clipping
+├── enhance/             Removing background noise
+│   └── spectral.py      OMLSA masking, pure numpy — nothing to download
+├── postprocess/         Changing audio, after enhancement
+│   ├── filters.py       Rumble removal, speech EQ, harsh-sound control
+│   └── normalize.py     Even volume, guaranteed no clipping
+└── evaluate/            Scoring output against a known-good reference
+    └── compare.py       SDR, SI-SDR, and an explanation when neither applies
+
+app.py                   The browser interface
 ```
 
-Still to come: `enhance/`, `separate/`, `transcribe/`, `evaluate/`, `viz/`,
-and the Streamlit interface.
+Still to come: `separate/`, `transcribe/`, `viz/`.
 
 ### Why everything is forced to one format
 
@@ -167,6 +175,23 @@ Two things it deliberately does **not** do:
 It also checks there's genuine sibilance present before touching anything, so
 low-frequency material passes through untouched.
 
+### Removing the background noise
+
+The noise remover estimates the background hiss from the quietest moments in
+your file, works out which frequencies hold speech and which hold noise, and
+turns that down. No neural network, nothing to download, and it runs in about a
+hundredth of the recording's duration.
+
+It is good at steady background noise — hiss, hum, fan whir, air conditioning.
+It is not good at noise that moves: a passing car, someone talking in the next
+room, a keyboard. A trained model handles those; this method cannot, and the
+toolkit says so rather than pretending otherwise.
+
+There is a `strength` control for a reason. Turned up, it removes more noise and
+also takes a little brightness out of the voice. On a clean recording it turns
+itself off entirely and hands the audio straight back — the tool checks whether
+there is anything to remove before touching anything.
+
 ---
 
 ## Getting started
@@ -182,7 +207,8 @@ cd speech-enhancement-toolkit
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-pip install -r requirements.txt
+pip install -e .
+pip install -e ".[ui]"
 ```
 
 FFmpeg (needed for MP3 and M4A; WAV works without it):
@@ -193,11 +219,56 @@ winget install Gyan.FFmpeg
 
 ---
 
+## Using it
+
+### In the browser
+
+The easiest way in. This starts a local page and opens it:
+
+```powershell
+python -m aelf.cli serve
+```
+
+Then: add your file, pick a strength, listen, download. The audio never leaves
+your computer.
+
+### From the command line
+
+```powershell
+# Clean up a file. Result lands in work\outputs\
+python -m aelf.cli enhance my_recording.wav
+
+# Choose where it goes, and how hard it works
+python -m aelf.cli enhance my_recording.wav -o clean.wav --strength 0.8
+
+# Also even out the volume while you're at it (-16 suits headphones)
+python -m aelf.cli enhance my_recording.mp3 --target -16
+```
+
+`--strength` runs from `0.0` (leave it alone) to `1.0` (remove as much as this
+method can without hollowing out speech). `0.5` is the default and a sensible
+starting point.
+
+### Measuring real improvement
+
+If you happen to have the clean recording of the same speech, made the same way,
+you can get an actual score instead of a measurement:
+
+```powershell
+python -m aelf.cli compare my_recording_clean.wav my_recording_clean_reference.wav
+```
+
+It reports signal-to-distortion ratio and its scale-invariant variant, and it
+refuses to produce a number if the two files don't line up — see
+[Honest by design](#honest-by-design).
+
+---
+
 ## Development
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q         # 124 tests
-.\.venv\Scripts\python.exe -m ruff check src tests scripts
+.\.venv\Scripts\python.exe -m pytest -q         # 174 tests
+.\.venv\Scripts\python.exe -m ruff check app.py src tests scripts
 .\.venv\Scripts\python.exe scripts/check_clipping.py
 .\.venv\Scripts\python.exe scripts/check_lufs_reference.py
 ```
@@ -226,17 +297,55 @@ Where a measurement can be done more directly than by comparison, we do it
 directly. Filter gains are verified from the filter's response to a single
 impulse, not inferred.
 
+### How the noise remover was tuned
+
+Every number in this project was measured, not assumed, and the noise remover
+took three rounds of it. The bugs are worth recording, because each one looked
+correct in code and was only exposed by measurement.
+
+**Reconstruction blew up by a factor of a million.** A Hann window is exactly
+zero at its first and last sample, so the very first output sample was being
+divided by a window weight of about `1.8e-11`. Peaks came back at `7e+06`
+instead of `0.10`. Fixed by padding half a frame at both ends and trimming it
+back off afterwards. There is now a test that reconstructs a signal through the
+overlap-add path with an all-ones mask and requires it to come back within
+`1e-6` of the original — that test fails loudly if the windowing ever breaks
+again.
+
+**The mask removed almost nothing.** The noise estimator took the 15th percentile
+of the quietest frames, which on real hiss measured **14.7 dB below the true
+noise power**. An underestimated noise floor inflates the apparent
+signal-to-noise ratio, which pushes the decision-directed estimator's fixed point
+toward unity gain — so asking for more suppression did essentially nothing.
+Measured: 0.8 dB of hiss removed at strength 0.5. Switching to the *mean* of
+those frames: 12 dB.
+
+**Then it damaged clean recordings.** With suppression actually working, a clean
+voice recording came back changed by 8.4% of its own RMS, which is audible. The
+cause is inherent to the approach: on clean audio the "quietest frames" are the
+speaker's quietest moments, so the estimator learns speech as noise and then
+suppresses it.
+
+The fix is to notice when there is nothing to remove. How far the noise estimate
+sits below the overall signal level separates the cases cleanly — 0.8 dB for
+noise alone, 7.2 dB for speech at 22 dB SNR, **28.1 dB for clean speech**. Past
+about 26 dB the honest conclusion is that the quietest thing in the file is the
+speaker, not the room, so suppression switches itself off. Clean recordings now
+come back bit-identical, while speech at 22 dB SNR still gains 18.8 dB.
+
+The browser interface is tested by driving the real Streamlit script headlessly,
+which catches the failures that matter there — a bad import, a config value that
+moved, a stereo buffer the audio player can't encode.
+
 ---
 
 ## Planned
 
-- Noise suppression (spectral, with a neural option)
 - Source separation (Demucs `htdemucs`, SpeechBrain SepFormer as fallback)
 - Voice activity detection
 - Transcription with timestamps, on original and enhanced audio for comparison
-- Objective scoring, gated on having a valid reference
+- A neural noise-removal backend, used automatically when installed
 - Waveform and spectrogram views
-- Streamlit interface
 
 Where a stage can't verify its own output, it reports that it couldn't rather
 than returning a number that looks like an answer.

@@ -1,0 +1,17 @@
+# Local-only by configuration, not just by intention.
+
+# Bind to the loopback interface only. Without this Streamlit listens on every
+# interface and prints a "Network URL", which would let other machines on the
+# network reach the page handling someone's audio.
+server.address = "127.0.0.1"
+
+# No usage statistics. The toolkit claims nothing leaves the machine; this is
+# what makes that true of Streamlit itself rather than just of our code.
+browser.gatherUsageStats = false
+
+# A larger payload cap than the default, so a long recording can be uploaded
+# through the page rather than failing at 200 MB.
+server.maxUploadSize = 500
+
+[client]
+toolbarMode = "minimal"

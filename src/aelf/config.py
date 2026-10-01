@@ -49,6 +49,27 @@ STRENGTH_MAX = 1.0
 STRENGTH_DEFAULT = 0.5
 OMLSA_FLOOR_ALPHA = 0.05
 OMLSA_FLOOR_STRONG = 0.01
+# Over-subtraction applied to the noise estimate at full strength. The decision
+# -directed estimator conservatively keeps some noise, because the cost of
+# clipping a speech onset is higher than the cost of leaving hiss. This buys
+# that back: measured on a speech-plus-hiss signal, 0 dB gave -12.2 dB of hiss
+# removal for -2.2 dB of speech, and no over-subtraction gave only -6.2 dB.
+OVER_SUBTRACTION_MAX_DB = 8.0
+# Separability gate. The noise estimate is taken from the quietest frames, and
+# on clean audio those are the speaker's quietest moments rather than a noise
+# floor. Measuring the gap between the estimate and the overall level separates
+# the cases: 0.8 dB for noise only, 0.9 dB for speech at 12 dB SNR, 7.2 dB at
+# 22 dB SNR, 16.2 dB at 32 dB SNR, and 28.1 dB for clean speech.
+#
+# Swept against both objectives: at 26 dB the gate leaves clean speech bit-exact
+# (0.00% RMS change) while still suppressing by 18.8 dB SNR gain at 22 dB input
+# SNR and 16.5 dB at 12 dB input SNR. Pushing the threshold lower to 22 dB
+# starts costing clean speech; raising it to 30 dB leaves 32 dB-SNR input
+# under-suppressed (0.5% change on clean, and only 5.4 dB gain where 26 dB
+# gives 4.1 dB and 40 dB gives 7.7 dB). The 26 dB point is where clean audio
+# is still exact.
+SEPARABILITY_OFF_DB = 8.0
+SEPARABILITY_ON_DB = 26.0
 
 # Minimum separation of stems before we are willing to call a split credible.
 # Two sources within 1 dB of each other is a strong hint the model did not

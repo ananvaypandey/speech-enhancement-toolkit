@@ -62,12 +62,12 @@ def estimate_noise_profile(buffer: AudioBuffer) -> NoiseProfile:
 
     if mono.size == 0:
         return NoiseProfile(
-            noise_floor_dbfs=-np.inf,
+            noise_floor_dbfs=None,
             noise_floor_hz=0.0,
             spectral_tilt_db_per_octave=0.0,
             is_stationary=False,
             estimated_hum_hz=None,
-            estimated_snr_db=0.0,
+            estimated_snr_db=None,
             dominant_noise_band_hz=SPEECH_BAND_HZ,
             method="empty-signal",
             confidence=Confidence.NONE,
@@ -97,12 +97,12 @@ def estimate_noise_profile(buffer: AudioBuffer) -> NoiseProfile:
     active = frame_power[frame_power > 0.0]
     if active.size == 0:
         return NoiseProfile(
-            noise_floor_dbfs=-np.inf,
+            noise_floor_dbfs=None,
             noise_floor_hz=0.0,
             spectral_tilt_db_per_octave=0.0,
             is_stationary=False,
             estimated_hum_hz=None,
-            estimated_snr_db=0.0,
+            estimated_snr_db=None,
             dominant_noise_band_hz=SPEECH_BAND_HZ,
             method="digital-silence",
             confidence=Confidence.NONE,

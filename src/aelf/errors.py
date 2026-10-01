@@ -69,6 +69,20 @@ class ReferenceUnavailableError(AelfError):
     )
 
 
+class MetricUnavailableError(AelfError):
+    """A quality metric could not be computed for a legitimate reason.
+
+    Distinct from `BackendUnavailableError`: nothing is missing or broken, the
+    inputs simply do not support the measurement. Reported rather than guessed.
+    """
+
+    user_message = "No quality score was computed, because the inputs do not support one."
+    remedy = (
+        "Reference-based metrics need a clean recording of the same speech. Without a usable "
+        "reference, only measurements of the audio itself are reported."
+    )
+
+
 class BackendUnavailableError(AelfError):
     user_message = "The requested processing backend is not available."
     remedy = "Install the optional dependency, or select a different backend in the interface."

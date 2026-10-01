@@ -17,7 +17,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ui = ["streamlit>=1.40", "pandas>=2.2", "matplotlib>=3.9"]
+# Only what app.py actually imports. Charting deps come back with viz/.
+ui = ["streamlit>=1.40"]
 speech = [
     "torch>=2.4",
     "torchaudio>=2.4",
@@ -31,6 +32,9 @@ dev = ["pytest>=8.0", "ruff>=0.6"]
 all = [
     "aelf[ui,speech,enhance,separate,transcribe,metrics,dev]",
 ]
+
+[project.scripts]
+aelf = "aelf.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

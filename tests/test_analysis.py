@@ -176,13 +176,17 @@ class TestNoiseProfile:
         profile = estimate_noise_profile(buffer_of(signal))
         assert not profile.is_stationary
 
-    def test_silence_yields_no_confidence(self) -> None:
+    def test_silence_reports_nothing_measurable(self) -> None:
+        """Silence has no floor and no SNR. Reporting -inf dBFS and 0 dB would
+        be two numbers that look measured but are not, so both stay None."""
         profile = estimate_noise_profile(buffer_of(silence()))
         assert profile.confidence == Confidence.NONE
-        assert profile.noise_floor_dbfs == -np.inf
+        assert profile.noise_floor_dbfs is None
+        assert profile.estimated_snr_db is None
 
     def test_speech_plus_noise_gives_positive_snr(self) -> None:
         profile = estimate_noise_profile(buffer_of(speech_plus_noise(noise_sigma=0.005, speech_gain=0.3)))
+        assert profile.estimated_snr_db is not None
         assert profile.estimated_snr_db > 0.0
         assert profile.frame_count > 0
 
