@@ -171,7 +171,7 @@ def build() -> Document:
         "The honest conclusion is that separating voices from a competing voice needs "
         "source separation rather than filtering. That work is specified and its "
         "dependencies are declared, but it is not implemented, and this report does not "
-        "claim otherwise. Across the project, 212 automated tests pass, three genuine "
+        "claim otherwise. Across the project, 215 automated tests pass, three genuine "
         "defects found during verification are documented in Section 5, and the "
         "limitations are stated in Section 6.",
     )
@@ -192,7 +192,7 @@ def build() -> Document:
     bullet(doc, "python-docx - generating this report")
 
     heading(doc, "Quality Tools", 2)
-    bullet(doc, "pytest 9.1.1 - 212 automated tests")
+    bullet(doc, "pytest 9.1.1 - 215 automated tests")
     bullet(doc, "Ruff 0.16.9 - linting, clean on every file")
     bullet(doc, "Git - version control, with meaningful commit messages")
 
@@ -339,7 +339,7 @@ def build() -> Document:
     bullet(
         doc,
         "Delivered: a working toolkit with a command-line interface (enhance, "
-        "compare, serve) and a Streamlit browser interface sharing one tested "
+        "analyze, compare, serve) and a Streamlit browser interface sharing one tested "
         "processing chain.",
     )
     bullet(
@@ -368,7 +368,7 @@ def build() -> Document:
     )
     bullet(
         doc,
-        "Verification: 212 automated tests pass and Ruff reports no issues. Coverage "
+        "Verification: 215 automated tests pass and Ruff reports no issues. Coverage "
         "includes the cases that usually break audio software - digital silence, "
         "single-frame input, mono and stereo, mismatched reference lengths, and "
         "integer overflow in the limiter.",
@@ -393,7 +393,7 @@ def build() -> Document:
     heading(doc, "Step 2 - Inspect the Available Commands", 2)
     para(
         doc,
-        "The command-line interface exposes three verbs. Each reports its own "
+        "The command-line interface exposes four verbs. Each reports its own "
         "options so the intended behaviour is discoverable without reading source.",
     )
     code(doc, "aelf --help\n\n"
@@ -404,13 +404,17 @@ def build() -> Document:
               "    enhance             Clean up a recording\n"
               "    compare             Score output against a clean reference\n"
               "    serve               Open the browser interface")
-    shot(doc, 2, "Terminal showing the aelf --help output above.")
+    shot(doc, 2, "Terminal showing all four commands from aelf --help.")
 
     heading(doc, "Step 3 - Measure the Recording Before Changing It", 2)
     para(
         doc,
-        "Nothing is processed until the audio has been measured. Running the "
-        "analysis over the intercepted recording produces the figures below. The "
+        "Nothing is processed until the audio has been measured. The analyze "
+        "command writes nothing, so these are the untouched measurements:\\n"
+        "\\n"
+        "aelf analyze \"SUBMISSION/v4 test (final).mp3\"\\n"
+        "\\n"
+        "which produces the figures below. The "
         "66.7 Hz component is mains hum, and the profiler correctly reports the "
         "background as non-stationary with a 23 dB level spread.",
     )
@@ -425,8 +429,8 @@ def build() -> Document:
               "        noise spectrum, consistent with mains hum.\n"
               "  note  Signal level varies by 23 dB (interquartile spread);\n"
               "        the background is non-stationary.")
-    shot(doc, 3, "Terminal showing the analysis output for the intercepted "
-                 "recording.")
+    shot(doc, 3, "Terminal showing aelf analyze on the submitted MP3: noise floor "
+                 "-81.49 dBFS, SNR 59.88 dB, non-stationary warning, 66.7 Hz mains hum.")
 
     heading(doc, "Step 4 - Read the Transcript to Identify the Interference", 2)
     para(
@@ -448,14 +452,20 @@ def build() -> Document:
         "This is the finding the rest of the report is built on.",
         italic=True,
     )
-    shot(doc, 4, "The transcript file open, showing the speaker-labelled segments.")
+    shot(doc, 4, "The transcript open in an editor, showing speaker labels such as "
+                 "Speaker 6(QUEEN) and Speaker (regiment shouting).")
 
     heading(doc, "Step 5 - Sweep the Strength Setting", 2)
     para(
         doc,
         "To find out how far filtering could go before it started removing wanted "
-        "speech, the strength parameter was swept on comparable material with real "
-        "layered interference and each setting measured.",
+        "speech, the strength parameter was swept on the unprocessed intercepted "
+        "recording and each setting measured:\\n"
+        "\\n"
+        "aelf analyze work/uploads/war-intercept.wav --sweep\\n"
+        "\\n"
+        "Strength 0.0 leaves the audio alone; each step up applies more "
+        "suppression.",
     )
     code(doc, "strength  floor   drop   speech    SNR\n"
               "                   dB      dB      dB\n"
@@ -472,7 +482,8 @@ def build() -> Document:
         "1.0 lowers the measured noise floor further but reduces signal-to-noise "
         "ratio, which is the definition of removing wanted content.",
     )
-    shot(doc, 5, "Terminal showing the strength sweep table.")
+    shot(doc, 5, "Terminal showing the aelf analyze --sweep table: SNR peaking at "
+                 "9.86 dB on strength 0.75, then falling to 9.62 on 1.00.")
 
     heading(doc, "Step 6 - Enhance the Intercepted Recording", 2)
     para(doc, "Processing the recording, specifying an output and a loudness target:")
@@ -490,7 +501,8 @@ def build() -> Document:
               "- Speech against background: 0.8 dB -> 5.5 dB (up 4.8 dB (better))\n"
               "- Loudness: -22.6 LUFS -> -23.0 LUFS\n"
               "- Peak: -11.9 dBFS -> -6.8 dBFS")
-    shot(doc, 6, "Terminal showing the enhance command and its before/after report.")
+    shot(doc, 6, "Terminal showing aelf enhance with the before/after report and "
+                 "the note that a lower noise floor is not a quality score.")
 
     heading(doc, "Step 7 - Score the Result Against a Clean Reference", 2)
     para(
@@ -507,7 +519,8 @@ def build() -> Document:
         "poor even when the speech is clean. SI-SDR is gain-invariant and is the "
         "meaningful figure.",
     )
-    shot(doc, 7, "Terminal showing the compare output with SDR and SI-SDR.")
+    shot(doc, 7, "Terminal showing aelf compare: signal-to-distortion -15.15 dB, "
+                 "scale-invariant SDR +1.94 dB, confidence Uncertain.")
 
     heading(doc, "Step 8 - Open the Browser Interface", 2)
     para(
@@ -540,9 +553,9 @@ def build() -> Document:
         "input, mono and stereo encoding, mismatched reference durations, limiter "
         "overflow, privacy flags, and a decode of the actual download bytes.",
     )
-    code(doc, "python -m pytest\n212 passed in 32.00s\n\n"
+    code(doc, "python -m pytest\n215 passed in 21.00s\n\n"
               "python -m ruff check app.py src tests scripts\nAll checks passed!")
-    shot(doc, 10, "Terminal showing 212 passed and the clean Ruff result.")
+    shot(doc, 10, "Terminal showing the pytest summary line and the clean Ruff result.")
 
     # ------------------------------------------------- defects found
     heading(doc, "Defects Found During Verification", 1)
@@ -633,18 +646,19 @@ def build() -> Document:
     )
     for n, desc in [
         (1, "Terminal - editable install and the 'ready' confirmation"),
-        (2, "Terminal - aelf --help"),
-        (3, "Terminal - analysis of the intercepted recording: duration, noise "
-            "floor, SNR, non-stationary warning, 66.7 Hz mains hum"),
+        (2, "Terminal - aelf --help showing all four commands"),
+        (3, "Terminal - aelf analyze on the submitted MP3: duration, dual-mono "
+            "note, noise floor -81.49, SNR 59.88, non-stationary warning, 66.7 Hz hum"),
         (4, "The transcript open in a text editor, showing speaker-labelled "
             "segments such as 'Speaker (regiment shouting)'"),
-        (5, "Terminal - strength sweep table showing SNR peaking at 0.75"),
-        (6, "Terminal - aelf enhance on the intercepted recording with the "
-            "before/after report"),
+        (5, "Terminal - aelf analyze --sweep: the strength table, showing SNR "
+            "peaking at 9.86 dB on 0.75 and falling to 9.62 on 1.00"),
+        (6, "Terminal - aelf enhance with --strength 0.75 --target -30, and the "
+            "before/after report it prints"),
         (7, "Terminal - aelf compare with SDR and SI-SDR"),
         (8, "Browser - uploaded file, measurements, three players, download button"),
         (9, "Browser - sidebar with strength 0.75 and target -30 LUFS"),
-        (10, "Terminal - 212 passed and clean Ruff result"),
+        (10, "Terminal - the pytest summary line and the clean Ruff result"),
     ]:
         bullet(doc, f"Screenshot {n}: {desc}")
 

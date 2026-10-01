@@ -275,13 +275,74 @@ def test_the_browser_is_not_opened_if_the_server_never_starts(monkeypatch: pytes
     assert opened == []
 
 
-def test_parser_exposes_the_three_documented_commands() -> None:
+def test_parser_exposes_the_documented_commands() -> None:
     from aelf.cli import build_parser
 
     parser = build_parser()
     assert parser.parse_args(["enhance", "x.wav"]).command == "enhance"
     assert parser.parse_args(["compare", "a.wav", "b.wav"]).command == "compare"
     assert parser.parse_args(["serve"]).command == "serve"
+    assert parser.parse_args(["analyze", "x.wav"]).command == "analyze"
+
+
+def test_analyze_reports_measurements_without_writing_anything(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Measurement comes before modification.
+
+    If analyze ever wrote a file, the "before" numbers could stop describing the
+    audio that was actually processed, and every comparison built on them would
+    be quietly wrong.
+    """
+    from aelf.cli import main
+
+    # A tone preceded by silence, so there is a genuine floor to find.
+    t = np.arange(SR) / SR
+    signal = np.where(t < 0.5, 0.0, 0.1 * np.sin(2 * np.pi * 1000 * t))
+    target = Path(write_fixture(tmp_path / "quiet.wav", signal.astype(np.float32)))
+
+    before = sorted(p.name for p in tmp_path.iterdir())
+    rc = main(["analyze", str(target)])
+    after = sorted(p.name for p in tmp_path.iterdir())
+
+    assert rc == 0
+    assert before == after, "analyze must not write files"
+
+    out = capsys.readouterr().out
+    assert "duration" in out
+    assert "noise floor" in out
+    assert "stationary" in out
+
+
+def test_analyze_sweep_reports_every_strength_and_warns_about_speech_loss(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The sweep exists to find where SNR stops improving.
+
+    Printing a table without that warning invites reading "lowest noise floor" as
+    "best", which is the mistake the table was added to prevent.
+    """
+    from aelf.cli import main
+
+    target = Path(
+        write_fixture(tmp_path / "tone.wav", speech_plus_noise(seconds=3.0))
+    )
+
+    rc = main(["analyze", str(target), "--sweep"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "strength sweep" in out
+    for strength in ("0.00", "0.25", "0.50", "0.75", "1.00"):
+        assert strength in out
+    assert "removing speech" in out
+
+
+def test_analyze_rejects_a_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
+    from aelf.cli import main
+
+    assert main(["analyze", "definitely-not-here.wav"]) == 2
+    assert "no such file" in capsys.readouterr().err
 
 
 def test_serve_pins_the_server_to_loopback_and_disables_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:

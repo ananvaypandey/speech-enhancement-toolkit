@@ -21,6 +21,8 @@ import threading
 import webbrowser
 from pathlib import Path
 
+import numpy as np
+
 from .analysis.levels import measure_levels
 from .analysis.noise_profile import estimate_noise_profile
 from .config import PATHS, TARGET_LUFS_SPEECH
@@ -255,6 +257,98 @@ def cmd_serve(args: argparse.Namespace) -> int:
     sys.exit(st_cli.main())
 
 
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """Measure a recording without changing it.
+
+    Every claim in the report starts here. Printing the numbers before touching
+    the audio is what makes the before-and-after comparison mean anything.
+    """
+    source = Path(args.input).expanduser()
+    if not source.exists():
+        print(f"error: no such file: {source}", file=sys.stderr)
+        return 2
+    check_supported(source)
+
+    buffer = decode_to_canonical(source)
+    samples = buffer.samples
+    levels = measure_levels(buffer)
+    profile = estimate_noise_profile(buffer)
+
+    print("file")
+    print(f"  path        {source.name}")
+    print(f"  duration    {buffer.duration_s:.1f}s")
+    print(f"  rate        {buffer.sample_rate} Hz")
+    print(f"  channels    {buffer.channels}")
+
+    identical = bool(
+        buffer.channels == 2
+        and (samples[:, 0] == samples[:, 1]).all()
+    )
+    if identical:
+        print("              (dual mono - left and right identical)")
+
+    print()
+    print(f"  peak        {_fmt_db(levels.peak_dbfs)}")
+    print(f"  loudness    {_fmt_lufs(levels.lufs_integrated)}")
+    print(f"  noise floor {profile.noise_floor_dbfs:.2f} dBFS")
+    print(f"  SNR         {_fmt_snr(profile.estimated_snr_db)}")
+    print(f"  stationary  {profile.is_stationary}")
+
+    clip_events = getattr(levels, "clip_events", None)
+    if clip_events:
+        print(f"  clipped     {clip_events} events above full scale")
+
+    if profile.notes:
+        print()
+        for note in profile.notes:
+            print(f"  note  {note}")
+
+    if not args.sweep:
+        return 0
+
+    # Sweeping strength shows where noise removal starts removing speech. The
+    # optimum is not the highest setting, so measuring it beats guessing it.
+    from .enhance.spectral import suppress_stationary_noise
+
+    print()
+    print("strength sweep")
+    print("  strength  floor    drop    speech     SNR")
+    print("                      dB       dB       dB")
+
+    mono = samples.mean(axis=1)
+    window = max(1, int(buffer.sample_rate * 0.032))
+    step = max(1, window // 2)
+    starts = range(0, max(1, len(mono) - window), step)
+
+    def frame_levels(sig: np.ndarray) -> np.ndarray:
+        return np.array([
+            20 * np.log10(max(float(np.sqrt((sig[i:i + window] ** 2).mean())), 1e-20))
+            for i in starts
+        ])
+
+    base = frame_levels(mono)
+    quiet = base <= np.percentile(base, 25)
+    loud = base >= np.percentile(base, 75)
+    floor_before = float(np.mean(base[quiet]))
+
+    for strength in (0.0, 0.25, 0.5, 0.75, 1.0):
+        out = np.asarray(
+            suppress_stationary_noise(buffer, strength=strength).audio.samples,
+            dtype=np.float32,
+        ).mean(axis=1)
+        levels_out = frame_levels(out)
+        floor_after = float(np.mean(levels_out[quiet]))
+        speech_after = float(np.mean(levels_out[loud]))
+        snr = speech_after - floor_after
+        print(f"  {strength:5.2f}   {floor_after:7.2f} {floor_before - floor_after:7.2f}"
+              f"   {speech_after:7.2f} {snr:8.2f}")
+
+    print()
+    print("  SNR is the figure to watch. Once it stops rising while the floor")
+    print("  keeps falling, the extra suppression is removing speech.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aelf",
@@ -287,6 +381,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the rumble removal, speech EQ and harsh-sound control, leaving the voice as enhanced",
     )
     enhance_cmd.set_defaults(func=cmd_enhance)
+
+    analyze_cmd = sub.add_parser(
+        "analyze", help="Measure a recording without changing it")
+    analyze_cmd.add_argument("input", help="WAV, MP3 or M4A file")
+    analyze_cmd.add_argument(
+        "--sweep",
+        action="store_true",
+        help=("Also sweep the noise-suppression strength and report where "
+              "signal-to-noise ratio stops improving"),
+    )
+    analyze_cmd.set_defaults(func=cmd_analyze)
 
     compare_cmd = sub.add_parser("compare", help="Score output against a clean reference")
     compare_cmd.add_argument("enhanced", help="The processed file")
